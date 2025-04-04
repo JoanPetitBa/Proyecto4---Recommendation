@@ -1,2 +1,3 @@
 /data/*
 /dashboard.pbix
+/db/*.db
