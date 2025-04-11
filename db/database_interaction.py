@@ -1,4 +1,5 @@
 import os, sqlite3
+import pandas as pd
 
 def connectar_BDD():
     ruta_bd = f"{os.getcwd()}/db/market_place.db"
@@ -28,6 +29,19 @@ while query != "q":
             cursor.execute(query)
             for line in cursor.fetchall():
                 print(' | '.join(str(value) for value in line))
+
+            # GUARDAR LA RESPOSTA EN CSV
+            if query.split(" ")[0].lower() == "select":
+
+                guardar = input("Guardar en csv?: ")
+
+                if guardar.lower() in ["si","s","sí"]:
+
+                    nom_csv = input("Nom del csv: ")
+
+                    sql_df = pd.read_sql_query(query,connexio)
+                    sql_df.to_csv(f"{nom_csv}.csv",index=False)
+            
         except Exception as e:
             print(e)
     query = str(input("> "))
