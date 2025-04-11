@@ -1,5 +1,4 @@
 /backend/data/
-/backend/db/
 /backend/*.db
 /backend/dashboard.pbix
 
