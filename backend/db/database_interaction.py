@@ -2,7 +2,7 @@ import os, sqlite3
 import pandas as pd
 
 def connectar_BDD():
-    ruta_bd = f"{os.getcwd()}/db/market_place.db"
+    ruta_bd = f"{os.getcwd()}/backend/db/market_place.db"
     try:
         connexio = sqlite3.connect(ruta_bd)
         cursor = connexio.cursor()

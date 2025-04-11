@@ -18,3 +18,24 @@ FROM (
 WHERE rank <= 5 
 ORDER BY user_id, rank;
 ----------------------------------------------------------
+
+Sacar el TOP de aisles por segmento de usuario
+----------------------------------------------------------
+SELECT segmento, aisle, purchase_count 
+FROM (
+    SELECT 
+        u.segmento,
+        a.aisle,
+        COUNT(*) AS purchase_count,
+        ROW_NUMBER() OVER (
+            PARTITION BY u.segmento
+            ORDER BY COUNT(*) DESC
+        ) AS rank
+    FROM orders o    
+    JOIN products p ON o.product_id = p.product_id    
+    JOIN aisles a ON p.aisle_id = a.aisle_id 
+    JOIN users u ON o.user_id = u.user_id 
+    GROUP BY u.segmento, a.aisle 
+) AS ranked_aisles 
+WHERE rank <= 10 
+ORDER BY segmento, rank;
