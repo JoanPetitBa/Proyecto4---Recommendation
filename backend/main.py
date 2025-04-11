@@ -5,7 +5,10 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn  # Opcional para la ejecución local
-
+import sqlite3, joblib
+import pandas as pd
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 # --- Configuración de la aplicación ---
 app = FastAPI(title="E-commerce", version="1.0.0")
 
@@ -14,7 +17,8 @@ app = FastAPI(title="E-commerce", version="1.0.0")
 # se comunique con esta API. Ajusta los orígenes para producción.
 origins = [
     "http://localhost:3000",  # Puerto predeterminado de React
-    "http://localhost:5173",  # Puerto predeterminado de Vite
+    "http://localhost:5174",  # Puerto predeterminado de Vite
+    
     # Agrega tu URL desplegada aquí más tarde
     # "https://tu-frontend-en-render.com"
 ]
@@ -35,6 +39,8 @@ model = None
 def load_model_on_startup():
     """Carga el modelo cuando la aplicación se inicia."""
     global model
+    global conn
+    conn = sqlite3.connect("db/market_place.db", check_same_thread=False)
     if not os.path.exists(MODEL_PATH):
         print(f"Advertencia: El archivo del modelo no se encuentra en {MODEL_PATH}")
         return  # No hace nada si no se encuentra el modelo
@@ -45,6 +51,11 @@ def load_model_on_startup():
         print(f"Error al cargar el modelo: {e}")
         # La API sigue corriendo sin el modelo si hay un error
 
+@app.on_event("shutdown")
+async def shutdown():
+    """Cerrar la conexión de la base de datos cuando la aplicación se apague."""
+    global conn
+    conn.close()
 # --- Definición del modelo de entrada de datos (Pydantic) ---
 # IMPORTANTE: Ajusta estos campos EXACTAMENTE a las características que tu modelo espera,
 # con los mismos nombres y tipos de datos.
@@ -79,6 +90,40 @@ def read_root():
     """Devuelve un mensaje de bienvenida."""
     return {"message": "Bienvenido a la API de E-commerce"}
 
+# Conectar a la base de datos SQLite
+conn = sqlite3.connect("db/market_place.db")
+
+
+@app.get("/search")
+async def search_products(search: str):
+    """
+    Recibe un texto de búsqueda como parámetro de consulta y devuelve los productos más relevantes.
+    """
+    try:
+        # Cargar datos de la tabla 'products'
+        query = "SELECT product_id, product_name, aisle_id, department_id FROM products"
+        products = pd.read_sql_query(query, conn)
+
+        # Cargar el vectorizador y la matriz TF-IDF guardados
+        vectorizer = joblib.load('models/tfidf_vectorizer.joblib')
+        tfidf_matrix = joblib.load('models/tfidf_matrix.joblib')
+
+        # Función de búsqueda
+        query_clean = search.lower()
+        query_vec = vectorizer.transform([query_clean])
+        similarity = cosine_similarity(query_vec, tfidf_matrix).flatten()
+        top_indices = similarity.argsort()[::-1][:10]
+
+        resultados = products.iloc[top_indices][['product_id', 'product_name', 'aisle_id', 'department_id']]
+
+        # Verifica si hay resultados
+        if resultados.empty:
+            raise HTTPException(status_code=404, detail="No se encontraron productos.")
+
+        return resultados.to_dict(orient="records")
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error en la búsqueda: {e}")
 # --- Endpoint de predicción ---
 @app.post("/predict", response_model=PredictionOutput)
 async def predict_purchase(features: InputFeatures):

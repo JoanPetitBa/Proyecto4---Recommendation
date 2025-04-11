@@ -1,109 +1,77 @@
-import { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import axios from 'axios';
 import './App.css';
 
 interface Product {
-  id: number;
-  name: string;
+  product_id: number;
+  product_name: string;
+  aisle_id: number;
+  department_id: number;
 }
 
-const products: Product[] = [
-  { id: 1, name: 'Chocolate blanco' },
-  { id: 2, name: 'Café molido' },
-  { id: 3, name: 'Galletas de avena' },
-  { id: 4, name: 'Leche vegetal' },
-];
-
 function App() {
-  const [selectedProductId, setSelectedProductId] = useState<number>(
-    products[0].id
-  );
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [recommended, setRecommended] = useState<string[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [search, setSearch] = useState('');
+  const [result, setResult] = useState<Product[] | null>(null); // Explicitly typing result as an array of Product or null
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const selectedProduct = products.find((p) => p.id === selectedProductId);
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearch(e.target.value);
+  };
 
-  useEffect(() => {
-    const fetchImage = async () => {
-      if (!selectedProduct) return;
-      setLoading(true);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError('');
+    setResult(null);
 
-      try {
-        const response = await axios.get('https://api.pexels.com/v1/search', {
-          params: {
-            query: selectedProduct.name,
-            per_page: 1,
-          },
-          headers: {
-            Authorization:
-              'lZeUuH90LJs8HDtrlVm31nyOtwB5U50N80bDcVAuiyl0lgHUDAZ5eMs7', // 👈 pon tu API key aquí
-          },
-        });
+    // const apiUrl = process.env.VITE_APP_API_URL || 'http://localhost:8000';
+    const apiUrl = 'http://localhost:8000';
 
-        const photos = response.data.photos;
-        if (photos.length > 0) {
-          setImageUrl(photos[0].src.large);
-        } else {
-          setImageUrl(null);
-        }
-      } catch (err) {
-        console.error('Error fetching image:', err);
-        setImageUrl(null);
-      } finally {
-        setLoading(false);
-      }
-    };
+    try {
+      // Realizar la solicitud GET con el parámetro de búsqueda
+      const response = await axios.get(
+        `${apiUrl}/search?search=${encodeURIComponent(search)}`
+      );
 
-    const generateRecommendations = () => {
-      // lógica simple de ejemplo
-      if (!selectedProduct) return;
-      const recs = products
-        .filter((p) => p.id !== selectedProduct.id)
-        .slice(0, 2)
-        .map((p) => p.name);
-      setRecommended(recs);
-    };
-
-    fetchImage();
-    generateRecommendations();
-  }, [selectedProductId]);
+      // Manejar la respuesta de la API
+      setResult(response.data);
+    } catch (err) {
+      console.error('Error fetching data:', err);
+      setError('Error al buscar los productos.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="App">
-      <h1>🛒 Marketplace Inteligente</h1>
-
-      <label htmlFor="product">Selecciona un producto:</label>
-      <select
-        id="product"
-        value={selectedProductId}
-        onChange={(e) => setSelectedProductId(Number(e.target.value))}>
-        {products.map((product) => (
-          <option key={product.id} value={product.id}>
-            {product.name}
-          </option>
-        ))}
-      </select>
-
-      {loading && <p>Cargando imagen...</p>}
-
-      {imageUrl && (
+      <h1>Búsqueda de Productos</h1>
+      <form onSubmit={handleSubmit}>
         <div>
-          <h2>{selectedProduct?.name}</h2>
-          <img
-            src={imageUrl}
-            alt={selectedProduct?.name}
-            style={{ maxWidth: '400px' }}
+          <label htmlFor="search">Buscar Producto:</label>
+          <input
+            id="search"
+            type="text"
+            name="search"
+            value={search}
+            onChange={handleChange}
+            required
           />
         </div>
-      )}
+        <button type="submit" disabled={isLoading}>
+          {isLoading ? 'Buscando...' : 'Buscar'}
+        </button>
+      </form>
 
-      {recommended.length > 0 && (
-        <div>
-          <h3>Recomendado para tu cesta:</h3>
+      {/* Mostrar resultados */}
+      {error && <p className="error-message">{error}</p>}
+      {result && (
+        <div className="result">
+          <h2>Resultados:</h2>
           <ul>
-            {recommended.map((rec) => (
-              <li key={rec}>{rec}</li>
+            {result.map((product) => (
+              <li key={product.product_id}>{product.product_name}</li>
             ))}
           </ul>
         </div>
