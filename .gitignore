@@ -1,6 +1,7 @@
 /backend/data/
 /backend/db/*.db
 /backend/dashboard.pbix
+*.joblib
 
 # Python
 __pycache__/
