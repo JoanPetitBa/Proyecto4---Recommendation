@@ -1,40 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import ProductCard from './components/ProductCard.tsx';
 import './App.css';
-
-interface Product {
-  product_id: number;
-  product_name: string;
-  aisle_id: number;
-  department_id: number;
-}
+import { Product } from './types/product.ts';
+import RightMenu from './components/RightMenu';
 
 function App() {
   const [search, setSearch] = useState('');
-  const [result, setResult] = useState<Product[] | null>(null); // Explicitly typing result as an array of Product or null
+  const [result, setResult] = useState<Product[]>([]);
+  const [topSellers, setTopSellers] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [buyList, setBuyList] = useState<Product[]>([]);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  const apiUrl = 'http://localhost:8000';
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearch(e.target.value);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const performSearch = async (query: string) => {
     setIsLoading(true);
     setError('');
-    setResult(null);
-
-    // const apiUrl = process.env.VITE_APP_API_URL || 'http://localhost:8000';
-    const apiUrl = 'http://localhost:8000';
-
     try {
-      // Realizar la solicitud GET con el parámetro de búsqueda
       const response = await axios.get(
-        `${apiUrl}/search?search=${encodeURIComponent(search)}`
+        `${apiUrl}/search?search=${encodeURIComponent(query)}`
       );
-
-      // Manejar la respuesta de la API
       setResult(response.data);
     } catch (err) {
       console.error('Error fetching data:', err);
@@ -44,10 +36,52 @@ function App() {
     }
   };
 
+  const fetchTopSellers = async () => {
+    setIsLoading(true);
+    setError('');
+    try {
+      const response = await axios.get(`${apiUrl}/topSellers`);
+      setTopSellers(response.data); // Asignar los top sellers al estado
+    } catch (err) {
+      console.error('Error fetching top sellers:', err);
+      setError('Error al obtener los productos más vendidos.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const delayDebounce = setTimeout(() => {
+      if (search.trim() !== '') {
+        performSearch(search);
+      } else {
+        setResult([]);
+      }
+    }, 500);
+
+    return () => clearTimeout(delayDebounce);
+  }, [search]);
+  useEffect(() => {
+    // Obtener los top sellers cuando el componente se monta
+    fetchTopSellers();
+  }, []);
+
   return (
-    <div className="App">
+    <>
+      {!isMenuOpen && (
+        <div className="cart-button-container">
+          <button onClick={() => setIsMenuOpen(true)}>
+            🛒 Ver Carrito
+            {buyList.length > 0 && (
+              <span className="cart-badge">{buyList.length}</span>
+            )}
+          </button>
+        </div>
+      )}
+
       <h1>Búsqueda de Productos</h1>
-      <form onSubmit={handleSubmit}>
+
+      <form onSubmit={(e) => e.preventDefault()}>
         <div>
           <label htmlFor="search">Buscar Producto:</label>
           <input
@@ -59,24 +93,57 @@ function App() {
             required
           />
         </div>
-        <button type="submit" disabled={isLoading}>
-          {isLoading ? 'Buscando...' : 'Buscar'}
-        </button>
       </form>
 
-      {/* Mostrar resultados */}
+      {isLoading && <p>Buscando...</p>}
       {error && <p className="error-message">{error}</p>}
-      {result && (
-        <div className="result">
-          <h2>Resultados:</h2>
-          <ul>
-            {result.map((product) => (
-              <li key={product.product_id}>{product.product_name}</li>
-            ))}
-          </ul>
+
+      {result.length > 0 ? (
+        <div className="result-grid">
+          {result.map((product) => (
+            <ProductCard
+              key={product.product_id}
+              product={product}
+              buttonText="Añadir Producto"
+              onButtonPress={(product) =>
+                setBuyList((prevList) => [...prevList, product])
+              }
+            />
+          ))}
         </div>
+      ) : (
+        !isLoading && (
+          <div className="result-grid">
+            {topSellers.map((product) => (
+              <ProductCard
+                key={product.product_id}
+                product={product}
+                buttonText="Añadir Producto"
+                onButtonPress={(product) =>
+                  setBuyList((prevList) => [...prevList, product])
+                }
+              />
+            ))}
+          </div>
+        )
       )}
-    </div>
+
+      <RightMenu
+        products={buyList}
+        onRemove={(product) =>
+          setBuyList((prevList) =>
+            prevList.filter((p) => p.product_id !== product.product_id)
+          )
+        }
+        onClear={() => setBuyList([])}
+        onBuy={() => {
+          alert('Compra realizada con éxito 🚀');
+          setBuyList([]);
+        }}
+        isOpen={isMenuOpen}
+        onClose={() => setIsMenuOpen(false)}
+      />
+    </>
   );
 }
 

@@ -1,42 +1,76 @@
+/* Centrado y ancho limitado */
 #root {
-  max-width: 1280px;
   margin: 0 auto;
   padding: 2rem;
   text-align: center;
+  width: 80%;
+  max-width: 1200px;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+.App {
+  width: 100%;
+  margin: 0 auto;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
+.result-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 0.5fr); /* 5 columnas iguales */
+  gap: 10px;
+  margin-top: 20px;
+  justify-items: center; /* Centra las tarjetas dentro de cada celda */
+}
+.product-card {
+  width: 180px; /* Esto ya está bien para 5 por fila */
+  /* Resto de estilos... */
+}
+
+
+.error-message {
+  color: red;
+}
+@media (max-width: 1000px) {
+  .result-grid {
+    grid-template-columns: repeat(3, 1fr);
   }
-  to {
-    transform: rotate(360deg);
+}
+
+@media (max-width: 600px) {
+  .result-grid {
+    grid-template-columns: repeat(1, 1fr);
   }
 }
-
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+.cart-button-container {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 1001;
 }
 
-.card {
-  padding: 2em;
+.cart-button-container button {
+  position: relative;
+  padding: 10px 15px;
+  font-size: 16px;
+  background-color: #3498db;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s ease-in-out;
 }
 
-.read-the-docs {
-  color: #888;
+.cart-button-container button:hover {
+  background-color: #2980b9;
+}
+
+.cart-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background-color: red;
+  color: white;
+  border-radius: 50%;
+  padding: 2px 6px;
+  font-size: 12px;
+  font-weight: bold;
+  line-height: 1;
 }

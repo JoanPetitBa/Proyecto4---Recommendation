@@ -18,6 +18,7 @@ app = FastAPI(title="E-commerce", version="1.0.0")
 origins = [
     "http://localhost:3000",  # Puerto predeterminado de React
     "http://localhost:5174",  # Puerto predeterminado de Vite
+    "http://localhost:5173",  # Puerto predeterminado de Vite
     
     # Agrega tu URL desplegada aquí más tarde
     # "https://tu-frontend-en-render.com"
@@ -94,36 +95,43 @@ def read_root():
 conn = sqlite3.connect("db/market_place.db")
 
 
-@app.get("/search")
-async def search_products(search: str):
+@app.get("/topSellers")
+async def get_top_sellers():
     """
-    Recibe un texto de búsqueda como parámetro de consulta y devuelve los productos más relevantes.
+    Devuelve los productos más vendidos (top sellers) basados en la cantidad vendida.
     """
     try:
-        # Cargar datos de la tabla 'products'
-        query = "SELECT product_id, product_name, aisle_id, department_id FROM products"
-        products = pd.read_sql_query(query, conn)
+        # Cargar datos de la tabla 'sales' y 'products'
+        query_sales = """
+        SELECT product_id, SUM(quantity_sold) AS total_sales
+        FROM sales
+        GROUP BY product_id
+        ORDER BY total_sales DESC
+        LIMIT 10
+        """
+        top_sales = pd.read_sql_query(query_sales, conn)
 
-        # Cargar el vectorizador y la matriz TF-IDF guardados
-        vectorizer = joblib.load('models/tfidf_vectorizer.joblib')
-        tfidf_matrix = joblib.load('models/tfidf_matrix.joblib')
+        # Si no hay ventas, lanzamos un error
+        if top_sales.empty:
+            raise HTTPException(status_code=404, detail="No se encontraron productos más vendidos.")
+        
+        # Obtener los detalles de los productos más vendidos
+        product_ids = tuple(top_sales['product_id'].tolist())
+        query_products = f"""
+        SELECT product_id, product_name, aisle_id, department_id 
+        FROM products
+        WHERE product_id IN {product_ids}
+        """
+        products = pd.read_sql_query(query_products, conn)
 
-        # Función de búsqueda
-        query_clean = search.lower()
-        query_vec = vectorizer.transform([query_clean])
-        similarity = cosine_similarity(query_vec, tfidf_matrix).flatten()
-        top_indices = similarity.argsort()[::-1][:10]
+        # Unir las dos tablas para obtener el nombre del producto junto con las ventas
+        top_sellers = pd.merge(top_sales, products, on='product_id')
 
-        resultados = products.iloc[top_indices][['product_id', 'product_name', 'aisle_id', 'department_id']]
-
-        # Verifica si hay resultados
-        if resultados.empty:
-            raise HTTPException(status_code=404, detail="No se encontraron productos.")
-
-        return resultados.to_dict(orient="records")
+        # Devolver los productos más vendidos
+        return top_sellers.to_dict(orient="records")
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error en la búsqueda: {e}")
+        raise HTTPException(status_code=500, detail=f"Error al obtener los top sellers: {e}")
 # --- Endpoint de predicción ---
 @app.post("/predict", response_model=PredictionOutput)
 async def predict_purchase(features: InputFeatures):
