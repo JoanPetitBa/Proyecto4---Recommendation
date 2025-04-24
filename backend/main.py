@@ -41,16 +41,15 @@ def load_model_on_startup():
     """Carga el modelo cuando la aplicación se inicia."""
     global model
     global conn
-    conn = sqlite3.connect("db/market_place.db", check_same_thread=False)
-    if not os.path.exists(MODEL_PATH):
-        print(f"Advertencia: El archivo del modelo no se encuentra en {MODEL_PATH}")
-        return  # No hace nada si no se encuentra el modelo
-    try:
-        model = joblib.load(MODEL_PATH)
-        print("Modelo cargado exitosamente.")
-    except Exception as e:
-        print(f"Error al cargar el modelo: {e}")
-        # La API sigue corriendo sin el modelo si hay un error
+   # Conexión a la base de datos
+    conn = sqlite3.connect("db/market_place.db")
+
+    # Cargar recursos
+    productos = pd.read_sql_query("SELECT product_id, product_name FROM products", conn)
+    usuarios = pd.read_sql_query("SELECT user_id, segmento FROM users", conn)
+    rules = joblib.load("models/MBA/MBA_reglas_apriori.joblib")
+    tfidf_vectorizer = joblib.load("models/NLP/tfidf_vectorizer.joblib")
+    tfidf_matrix = joblib.load("models/NLP/tfidf_matrix.joblib")
 
 @app.on_event("shutdown")
 async def shutdown():
@@ -95,43 +94,6 @@ def read_root():
 conn = sqlite3.connect("db/market_place.db")
 
 
-@app.get("/topSellers")
-async def get_top_sellers():
-    """
-    Devuelve los productos más vendidos (top sellers) basados en la cantidad vendida.
-    """
-    try:
-        # Cargar datos de la tabla 'sales' y 'products'
-        query_sales = """
-        SELECT product_id, SUM(quantity_sold) AS total_sales
-        FROM sales
-        GROUP BY product_id
-        ORDER BY total_sales DESC
-        LIMIT 10
-        """
-        top_sales = pd.read_sql_query(query_sales, conn)
-
-        # Si no hay ventas, lanzamos un error
-        if top_sales.empty:
-            raise HTTPException(status_code=404, detail="No se encontraron productos más vendidos.")
-        
-        # Obtener los detalles de los productos más vendidos
-        product_ids = tuple(top_sales['product_id'].tolist())
-        query_products = f"""
-        SELECT product_id, product_name, aisle_id, department_id 
-        FROM products
-        WHERE product_id IN {product_ids}
-        """
-        products = pd.read_sql_query(query_products, conn)
-
-        # Unir las dos tablas para obtener el nombre del producto junto con las ventas
-        top_sellers = pd.merge(top_sales, products, on='product_id')
-
-        # Devolver los productos más vendidos
-        return top_sellers.to_dict(orient="records")
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al obtener los top sellers: {e}")
 # --- Endpoint de predicción ---
 @app.post("/predict", response_model=PredictionOutput)
 async def predict_purchase(features: InputFeatures):
@@ -167,6 +129,77 @@ async def predict_purchase(features: InputFeatures):
         print(f"Error durante la predicción: {e}")
         raise HTTPException(status_code=500, detail=f"Error interno durante el procesamiento de la predicción: {e}")
 
+@app.get("/search")
+async def search_products(search: str):
+    """
+    Recibe un texto de búsqueda como parámetro de consulta y devuelve los productos más relevantes.
+    Devuelve los productos más vendidos (top sellers) basados en la cantidad vendida.
+    """
+    try:
+        # Cargar datos de la tabla 'products'
+        query = "SELECT product_id, product_name, aisle_id, department_id FROM products"
+        products = pd.read_sql_query(query, conn)
+        
+        # Verifica si no se obtuvieron productos
+        if products.empty:
+            raise HTTPException(status_code=404, detail="No se encontraron productos en la base de datos.")
+        
+        # Cargar el vectorizador y la matriz TF-IDF guardados
+        vectorizer = joblib.load('models/NLP/tfidf_vectorizer.joblib')
+        tfidf_matrix = joblib.load('models/NLP/tfidf_matrix.joblib')
+
+        # Función de búsqueda
+        query_clean = search.lower()  # Normaliza la búsqueda
+        query_vec = vectorizer.transform([query_clean])  # Transforma la consulta al mismo espacio vectorial
+        similarity = cosine_similarity(query_vec, tfidf_matrix).flatten()  # Calcula la similitud de coseno
+        
+        # Obtenemos los índices de los productos más similares
+        top_indices = similarity.argsort()[::-1][:15]
+
+        # Seleccionamos los productos más similares basados en los índices
+        resultados = products.iloc[top_indices][['product_id', 'product_name', 'aisle_id', 'department_id']]
+        
+        # Verifica si hay resultados
+        if resultados.empty:
+            raise HTTPException(status_code=404, detail="No se encontraron productos relevantes para la búsqueda.")
+        
+        # Devuelve los resultados en formato de lista de diccionarios
+        return resultados.to_dict(orient="records")
+    
+    except Exception as e:
+        # Captura y devuelve cualquier error inesperado
+        raise HTTPException(status_code=500, detail=str(e))
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+@app.post("/login")
+async def login(request: LoginRequest):
+    """
+    Endpoint para iniciar sesión de usuario con el nombre de usuario y contraseña.
+    """
+    try:
+        # Consultar si el usuario existe en la base de datos
+        query = "SELECT user_id FROM users WHERE user_id = :username"
+        
+        # Leer los datos de la base de datos utilizando pandas
+        user_data = pd.read_sql_query(query, conn, params={"username": request.username})
+        
+        # Verifica si no se obtuvo el usuario
+        if user_data.empty:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+        
+        
+        # Verificar si la contraseña proporcionada coincide con la almacenada
+        
+        # Si todo está bien, devuelve un mensaje de éxito
+        return {"message": "Inicio de sesión exitoso", "username": request.username}
+
+    except Exception as e:
+        # Si ocurre algún error en el proceso
+        raise HTTPException(status_code=500, detail=str(e))
+    
 # --- Punto de entrada opcional para ejecución local ---
 # Render usará Gunicorn, no esto directamente.
 # if __name__ == "__main__":
