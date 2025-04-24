@@ -1,87 +1,51 @@
+/* Estilos principales para la tarjeta del producto */
 .product-card {
+  display: flex;
+  flex-direction: column; /* Apilamos los elementos de arriba hacia abajo */
+  align-items: center;    /* Centrado horizontal */
+  justify-content: center; /* Centrado vertical */
+  padding: 16px;
   background-color: #fff;
   border-radius: 10px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
-  width: 220px;
-  height: 280px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 15px;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-  cursor: pointer;
+  width: 250px; /* Ajusta el tamaño según tus necesidades */
+  height: 100px; /* Ajusta el tamaño según tus necesidades */
   margin: 10px;
   text-align: center;
+  transition: transform 0.2s ease-in-out;
 }
 
 .product-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
-}
-
-.product-image {
-  background-color: #3498db;
-  color: #fff;
-  font-size: 32px;
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto 10px auto; /* Centrado horizontal */
+  transform: scale(1.05); /* Un efecto de aumento al pasar el ratón */
 }
 
 .product-info {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 10px;
+  justify-content: center;
+  align-items: center; /* Alineamos los elementos dentro del contenedor de la info */
+  height: 100%; /* Asegura que los elementos ocupen todo el alto de la tarjeta */
 }
 
 .product-name {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: bold;
   color: #333;
-  margin-bottom: 10px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  width: 100%;
+  margin-bottom: 16px; /* Separación entre el nombre y el botón */
 }
 
 .action-btn {
-  padding: 8px 16px;
+  padding: 10px 20px;
   background-color: #3498db;
-  color: #fff;
+  color: white;
   border: none;
-  border-radius: 25px;
+  border-radius: 6px;
   cursor: pointer;
   font-size: 14px;
-  transition: background-color 0.3s ease, transform 0.3s ease;
-  width: 100%;
-  margin-top: 5px;
+  font-weight: 500;
+  transition: background-color 0.2s ease-in-out;
 }
 
 .action-btn:hover {
-  background-color: #2980b9;
-  transform: scale(1.05);
-}
-
-@media (max-width: 768px) {
-  .product-card {
-    width: 180px;
-    height: 240px;
-  }
-
-  .product-name {
-    font-size: 14px;
-  }
-
-  .action-btn {
-    font-size: 12px;
-  }
+  background-color: #2980b9; /* Color al pasar el ratón */
 }
