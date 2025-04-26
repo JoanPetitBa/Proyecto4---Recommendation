@@ -19,7 +19,9 @@ function App() {
   const [error, setError] = useState('');
   const [buyList, setBuyList] = useState<Product[]>([]);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  console.log(buyList);
+  const [isPopupOpen, setIsPopupOpen] = useState(false);
+  const [recomendation, setRecomendation] = useState<Product[]>([]);
+
   const apiUrl = 'http://localhost:8000';
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -75,6 +77,51 @@ function App() {
       setIsLoading(false);
     }
   };
+  const searchRecomendation = async (id: number) => {
+    console.log(id);
+    setRecomendation([
+      {
+        product_id: 28555,
+        product_name: 'coconut',
+        aisle_id: 24,
+        department_id: 4,
+      },
+
+      {
+        product_id: 27411,
+        product_name: 'lime in the coconut coconut crisps',
+        aisle_id: 50,
+        department_id: 19,
+      },
+      {
+        product_id: 6278,
+        product_name: 'coconut cream',
+        aisle_id: 76,
+        department_id: 6,
+      },
+
+      {
+        product_id: 9392,
+        product_name: 'cream of coconut',
+        aisle_id: 97,
+        department_id: 13,
+      },
+
+      {
+        product_id: 920,
+        product_name: 'coconut yogurt',
+        aisle_id: 120,
+        department_id: 16,
+      },
+
+      {
+        product_id: 10492,
+        product_name: 'coconut milk',
+        aisle_id: 66,
+        department_id: 6,
+      },
+    ]);
+  };
 
   useEffect(() => {
     const delayDebounce = setTimeout(() => {
@@ -89,6 +136,7 @@ function App() {
 
   useEffect(() => {
     fetchTopSellers();
+    document.body.style.overflow = 'hidden'; // bloquear scroll
   }, [, userLoged]);
 
   // Si no está logueado, mostrar formulario de login
@@ -183,9 +231,11 @@ function App() {
               key={product.product_id}
               product={product}
               buttonText="Añadir Producto"
-              onButtonPress={(product) =>
-                setBuyList((prevList) => [...prevList, product])
-              }
+              onButtonPress={(product) => {
+                searchRecomendation(product.product_id);
+                setBuyList((prevList) => [...prevList, product]);
+                setIsPopupOpen(true);
+              }}
             />
           ))}
         </div>
@@ -221,6 +271,31 @@ function App() {
         isOpen={isMenuOpen}
         onClose={() => setIsMenuOpen(false)}
       />
+      {isPopupOpen && (
+        <div className="popup-overlay">
+          <div className="popup-content">
+            <button
+              className="close-button"
+              onClick={() => setIsPopupOpen(false)}>
+              &times;
+            </button>
+            <h2>Productos Recomendados</h2>
+            <div className="recomendation-grid">
+              {recomendation.map((product) => (
+                <ProductCard
+                  key={product.product_id}
+                  product={product}
+                  buttonText="Añadir Producto"
+                  onButtonPress={(product) => {
+                    setBuyList((prevList) => [...prevList, product]);
+                    setIsPopupOpen(false);
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

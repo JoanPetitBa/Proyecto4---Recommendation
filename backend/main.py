@@ -46,7 +46,8 @@ def load_model_on_startup():
 
     # Cargar recursos
     productos = pd.read_sql_query("SELECT product_id, product_name FROM products", conn)
-    usuarios = pd.read_sql_query("SELECT user_id, segmento FROM users", conn)
+    # usuarios = pd.read_sql_query("SELECT user_id, segmento FROM users", conn)
+    usuarios = pd.read_sql_query("SELECT user_id FROM users", conn)
     rules = joblib.load("models/MBA/MBA_reglas_apriori.joblib")
     tfidf_vectorizer = joblib.load("models/NLP/tfidf_vectorizer.joblib")
     tfidf_matrix = joblib.load("models/NLP/tfidf_matrix.joblib")
