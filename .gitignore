@@ -1,5 +1,6 @@
 /backend/data/
 /backend/db/*.db
+/backend/db/*.sql
 /backend/dashboard.pbix
 *.joblib
 
