@@ -4,6 +4,7 @@ import ProductCard from './components/ProductCard.tsx';
 import './App.css';
 import { Product } from './types/product.ts';
 import RightMenu from './components/RightMenu';
+import Swal from 'sweetalert2';
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -123,6 +124,34 @@ function App() {
     ]);
   };
 
+  const checkServer = async () => {
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    try {
+      const res = await axios.get(`${apiUrl}/health`);
+      if (res.status === 200) {
+        Swal.close();
+      } else {
+        setTimeout(() => checkServer(), 5000);
+      }
+    } catch {
+      setTimeout(() => checkServer(), 5000);
+    }
+  };
+  useEffect(() => {
+    Swal.fire({
+      title: 'Verificando conexión con el servidor...',
+      text: 'Por favor espere...',
+      icon: 'info',
+      allowOutsideClick: false,
+      showConfirmButton: false,
+      willOpen: () => {
+        checkServer();
+      },
+      didOpen: () => {
+        Swal.showLoading();
+      },
+    });
+  }, []);
   useEffect(() => {
     const delayDebounce = setTimeout(() => {
       if (search.trim() !== '') {

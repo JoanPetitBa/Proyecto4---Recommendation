@@ -42,15 +42,15 @@ def load_model_on_startup():
     global model
     global conn
    # Conexión a la base de datos
-    conn = sqlite3.connect("db/market_place.db")
+    # conn = sqlite3.connect("db/market_place.db")
 
-    # Cargar recursos
-    productos = pd.read_sql_query("SELECT product_id, product_name FROM products", conn)
-    # usuarios = pd.read_sql_query("SELECT user_id, segmento FROM users", conn)
-    usuarios = pd.read_sql_query("SELECT user_id FROM users", conn)
-    rules = joblib.load("models/MBA/MBA_reglas_apriori.joblib")
-    tfidf_vectorizer = joblib.load("models/NLP/tfidf_vectorizer.joblib")
-    tfidf_matrix = joblib.load("models/NLP/tfidf_matrix.joblib")
+    # # Cargar recursos
+    # productos = pd.read_sql_query("SELECT product_id, product_name FROM products", conn)
+    # # usuarios = pd.read_sql_query("SELECT user_id, segmento FROM users", conn)
+    # usuarios = pd.read_sql_query("SELECT user_id FROM users", conn)
+    # rules = joblib.load("models/MBA/MBA_reglas_apriori.joblib")
+    # tfidf_vectorizer = joblib.load("models/NLP/tfidf_vectorizer.joblib")
+    # tfidf_matrix = joblib.load("models/NLP/tfidf_matrix.joblib")
 
 @app.on_event("shutdown")
 async def shutdown():
@@ -200,7 +200,24 @@ async def login(request: LoginRequest):
     except Exception as e:
         # Si ocurre algún error en el proceso
         raise HTTPException(status_code=500, detail=str(e))
-    
+@app.get("/health")
+def health_check():
+    return {
+        "status": "ok",
+        # "models": {
+        #     "tabular": {
+        #         "loaded": tabular_model is not None,
+        #         "features": len(tabular_features),
+        #         "threshold": tabular_threshold
+        #     },
+        #     "multimodal": {
+        #         "loaded": multimodal_model is not None,
+        #         "features": len(multimodal_features) if multimodal_model else 0,
+        #         "threshold": multimodal_threshold
+        #     }
+        # }
+    }
+
 # --- Punto de entrada opcional para ejecución local ---
 # Render usará Gunicorn, no esto directamente.
 # if __name__ == "__main__":
