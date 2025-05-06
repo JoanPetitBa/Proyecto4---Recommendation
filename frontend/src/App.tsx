@@ -15,7 +15,7 @@ function App() {
 
   const [search, setSearch] = useState('');
   const [result, setResult] = useState<Product[]>([]);
-  const [topSellers, setTopSellers] = useState<Product[]>([]);
+  const [userRecommend, setUserRecommend] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [buyList, setBuyList] = useState<Product[]>([]);
@@ -37,8 +37,6 @@ function App() {
       if (response.status === 200) {
         setIsLoggedIn(true);
         setUserLoged(username);
-        setUsername('');
-        setPassword('');
       } else {
         setLoginError('Credenciales incorrectas.');
       }
@@ -66,12 +64,16 @@ function App() {
     }
   };
 
-  const fetchTopSellers = async () => {
+  const userRecommendation = async () => {
     setIsLoading(true);
     setError('');
     try {
-      const response = await axios.get(`${apiUrl}/topSellers`);
-      setTopSellers(response.data);
+      const response = await axios.post(`${apiUrl}/predict`, {
+        id: username,
+        buyList: [],
+        top_n: 15,
+      });
+      setUserRecommend(response.data);
     } catch (err) {
       setError('Error al obtener los productos más vendidos.');
     } finally {
@@ -79,49 +81,18 @@ function App() {
     }
   };
   const searchRecomendation = async (id: number) => {
-    console.log(id);
-    setRecomendation([
-      {
-        product_id: 28555,
-        product_name: 'coconut',
-        aisle_id: 24,
-        department_id: 4,
-      },
+    try {
+      const productIds = [...buyList.map((item) => item.product_id), id];
+      const response = await axios.post(`${apiUrl}/predict`, {
+        id: username,
+        buyList: productIds,
+        top_n: 9,
+      });
 
-      {
-        product_id: 27411,
-        product_name: 'lime in the coconut coconut crisps',
-        aisle_id: 50,
-        department_id: 19,
-      },
-      {
-        product_id: 6278,
-        product_name: 'coconut cream',
-        aisle_id: 76,
-        department_id: 6,
-      },
-
-      {
-        product_id: 9392,
-        product_name: 'cream of coconut',
-        aisle_id: 97,
-        department_id: 13,
-      },
-
-      {
-        product_id: 920,
-        product_name: 'coconut yogurt',
-        aisle_id: 120,
-        department_id: 16,
-      },
-
-      {
-        product_id: 10492,
-        product_name: 'coconut milk',
-        aisle_id: 66,
-        department_id: 6,
-      },
-    ]);
+      setRecomendation(response.data);
+    } catch (err) {
+      setLoginError('Error al iniciar sesión.');
+    }
   };
 
   const checkServer = async () => {
@@ -164,7 +135,7 @@ function App() {
   }, [search]);
 
   useEffect(() => {
-    fetchTopSellers();
+    userRecommendation();
     document.body.style.overflow = 'hidden'; // bloquear scroll
   }, [, userLoged]);
 
@@ -214,9 +185,11 @@ function App() {
               className="logout-button"
               onClick={() => {
                 setIsLoggedIn(false);
+                setUsername('');
+                setPassword('');
                 setSearch('');
                 setResult([]);
-                setTopSellers([]);
+                setUserRecommend([]);
                 setBuyList([]);
               }}>
               Cerrar sesión
@@ -263,6 +236,7 @@ function App() {
               onButtonPress={(product) => {
                 searchRecomendation(product.product_id);
                 setBuyList((prevList) => [...prevList, product]);
+                console.log('hola');
                 setIsPopupOpen(true);
               }}
             />
@@ -270,18 +244,23 @@ function App() {
         </div>
       ) : (
         !isLoading && (
-          <div className="result-grid">
-            {topSellers.map((product) => (
-              <ProductCard
-                key={product.product_id}
-                product={product}
-                buttonText="Añadir Producto"
-                onButtonPress={(product) =>
-                  setBuyList((prevList) => [...prevList, product])
-                }
-              />
-            ))}
-          </div>
+          <>
+            <h2>Productos Recomendados</h2>
+            <div className="result-grid">
+              {userRecommend.map((product) => (
+                <ProductCard
+                  key={product.product_id}
+                  product={product}
+                  buttonText="Añadir Producto"
+                  onButtonPress={(product) => {
+                    searchRecomendation(product.product_id);
+                    setBuyList((prevList) => [...prevList, product]);
+                    setIsPopupOpen(true);
+                  }}
+                />
+              ))}
+            </div>
+          </>
         )
       )}
 

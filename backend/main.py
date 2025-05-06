@@ -1,4 +1,5 @@
 import os
+from typing import Any, Dict, List
 import joblib  # O usa pickle si usaste pickle
 import pandas as pd  # O numpy, dependiendo de los datos que espera tu modelo
 from fastapi import FastAPI, HTTPException
@@ -9,6 +10,10 @@ import sqlite3, joblib
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.neighbors import NearestNeighbors
+from collections import defaultdict, Counter
+
+
 # --- Configuración de la aplicación ---
 app = FastAPI(title="E-commerce", version="1.0.0")
 
@@ -33,24 +38,21 @@ app.add_middleware(
 )
 
 # --- Carga del modelo ---
-MODEL_PATH = 'modelo_ecommerce.pkl'
-model = None
 
 @app.on_event("startup")
 def load_model_on_startup():
     """Carga el modelo cuando la aplicación se inicia."""
-    global model
-    global conn
+    global conn,productos,usuarios,rules,tfidf_vectorizer,tfidf_matrix,nn_model
    # Conexión a la base de datos
-    # conn = sqlite3.connect("db/market_place.db")
+    conn = sqlite3.connect("db/market_place.db")
 
-    # # Cargar recursos
-    # productos = pd.read_sql_query("SELECT product_id, product_name FROM products", conn)
-    # # usuarios = pd.read_sql_query("SELECT user_id, segmento FROM users", conn)
-    # usuarios = pd.read_sql_query("SELECT user_id FROM users", conn)
-    # rules = joblib.load("models/MBA/MBA_reglas_apriori.joblib")
-    # tfidf_vectorizer = joblib.load("models/NLP/tfidf_vectorizer.joblib")
-    # tfidf_matrix = joblib.load("models/NLP/tfidf_matrix.joblib")
+    # Cargar recursos
+    productos = pd.read_sql_query("SELECT product_id, product_name FROM products", conn)
+    usuarios = pd.read_sql_query("SELECT user_id, segment FROM users", conn)
+    rules = joblib.load("models/MBA/MBA_reglas_apriori.joblib")
+    tfidf_vectorizer = joblib.load("models/NLP/tfidf_vectorizer.joblib")
+    tfidf_matrix = joblib.load("models/NLP/tfidf_matrix.joblib")
+    nn_model = NearestNeighbors(n_neighbors=20, metric='cosine').fit(tfidf_matrix)
 
 @app.on_event("shutdown")
 async def shutdown():
@@ -60,30 +62,8 @@ async def shutdown():
 # --- Definición del modelo de entrada de datos (Pydantic) ---
 # IMPORTANTE: Ajusta estos campos EXACTAMENTE a las características que tu modelo espera,
 # con los mismos nombres y tipos de datos.
-class InputFeatures(BaseModel):
-    edad: int
-    categoria_producto: str
-    historial_compras: bool  # Ejemplo: True o False
-    monto_gastado: float
-    # ... agrega TODAS las características que tu modelo necesita
-
-    model_config = {
-        "json_schema_extra": {
-            "examples": [
-                {
-                    "edad": 35,
-                    "categoria_producto": "Electrónica",
-                    "historial_compras": True,
-                    "monto_gastado": 150.75,
-                    # ... valores de ejemplo para todas las características
-                }
-            ]
-        }
-    }
 
 # --- Definición del modelo de salida de datos (Pydantic) ---
-class PredictionOutput(BaseModel):
-    probabilidad_compra: float = Field(..., example=0.85)
 
 # --- Endpoint raíz (opcional) ---
 @app.get("/")
@@ -96,36 +76,106 @@ conn = sqlite3.connect("db/market_place.db")
 
 
 # --- Endpoint de predicción ---
-@app.post("/predict", response_model=PredictionOutput)
+class PredictionOutput(BaseModel):
+    product_id: int
+    product_name: str
+    aisle_id: int  # ID del pasillo
+    department_id: int  # ID del departamento
+    peso_total: float
+    detalles: Dict[str, Any]
+
+class InputFeatures(BaseModel):
+    id: str
+    buyList: List[int]
+    top_n:int
+
+@app.post("/predict", response_model=List[PredictionOutput])
 async def predict_purchase(features: InputFeatures):
     """
     Recibe datos del cliente y devuelve la probabilidad de compra.
     """
-    global model
-    if model is None:
-        # Esto no debería ocurrir si el evento de inicio se ejecutó correctamente,
-        # pero es una buena práctica.
-        raise HTTPException(status_code=503, detail="Modelo no cargado o error durante la carga.")
+    user_id = features.id
+    buyList = features.buyList
+    top_n = features.top_n
+    print(user_id, buyList)
 
     try:
-        # 1. Convierte los datos de entrada al formato que el modelo espera.
-        #    Esto es CRUCIAL y depende totalmente de cómo entrenaste tu modelo.
-        data_dict = features.dict()  # Utiliza .dict() para Pydantic v1
-        data_df = pd.DataFrame([data_dict])
+        # Recomendaciones precalculadas de SVD
+        def recomendaciones_svd(user_id, top_n=10):
+            query = """
+            SELECT product_id, score FROM svd_predictions
+            WHERE user_id = ?
+            ORDER BY score DESC
+            LIMIT ?
+            """
+            df = pd.read_sql_query(query, conn, params=(user_id, top_n))
+            return df['product_id'].tolist()
 
-        # 2. Realiza la predicción.
-        #    Si tu modelo devuelve probabilidades directamente (por ejemplo, `predict_proba`):
-        probabilities = model.predict_proba(data_df)  # o data_array
-        # Suponiendo que la clase 1 corresponde a "compra"
-        compra_probability = probabilities[0][1]
+        # MBA rápido
+        def recomendaciones_mba(productos_en_carrito):
+            recomendados = set()
+            for producto in productos_en_carrito:
+                sub_rules = rules[rules['antecedents'].apply(lambda x: producto in x)]
+                recomendados.update(sub_rules['consequents'].explode().tolist())
+            return list(recomendados)
 
-        # 3. Devuelve el resultado.
-        return PredictionOutput(probabilidad_compra=compra_probability)
+        # NLP rápido con NearestNeighbors
+        def recomendaciones_nlp(query, top_n=10):
+            vector = tfidf_vectorizer.transform([query])
+            indices = nn_model.kneighbors(vector, return_distance=False)[0][:top_n]
+            return productos.iloc[indices]['product_id'].tolist()
+
+        # Motor híbrido explicativo
+        def products_recomender(user_id, productos_en_carrito=[], top_n = 9):
+            rec_svd = recomendaciones_svd(user_id, top_n * 2)
+            rec_mba = recomendaciones_mba(productos_en_carrito)
+
+            pesos = {'svd': 0.5, 'mba': 0.3, 'nlp': 0.2}
+            explicacion = defaultdict(lambda: {'peso_total': 0, 'detalles': {}})
+
+            # SVD
+            for pid in rec_svd:
+                score = conn.execute("SELECT score FROM svd_predictions WHERE user_id=? AND product_id=?", (user_id, pid)).fetchone()
+                if score:
+                    explicacion[pid]['peso_total'] += pesos['svd']
+                    explicacion[pid]['detalles']['svd'] = round(score[0], 3)
+
+            # MBA
+            for pid in rec_mba:
+                explicacion[pid]['peso_total'] += pesos['mba']
+                explicacion[pid]['detalles']['mba'] = "Regla encontrada"
+
+            # Armar resultados
+            final = sorted(explicacion.items(), key=lambda x: x[1]['peso_total'], reverse=True)[:top_n]
+            resultados = []
+            for pid, data in final:
+                nombre = productos[productos['product_id'] == pid]['product_name'].values[0]
+                
+                # Aquí se asume que aisle_id y department_id se obtienen de la base de datos
+                aisle_id = conn.execute("SELECT aisle_id FROM products WHERE product_id=?", (pid,)).fetchone()[0]
+                department_id = conn.execute("SELECT department_id FROM products WHERE product_id=?", (pid,)).fetchone()[0]
+
+                # Crear el resultado con los campos requeridos
+                resultados.append({
+                    'product_id': pid,
+                    'product_name': nombre,
+                    'aisle_id': aisle_id,
+                    'department_id': department_id,
+                    'peso_total': round(data['peso_total'], 3),
+                    'detalles': data['detalles']
+                })
+            return resultados
+
+        # Obtener resultados de las recomendaciones
+        resultados = products_recomender(user_id, buyList,top_n)
+        
+        # Devolver las predicciones
+        return resultados
 
     except KeyError as e:
-         # Error común si faltan columnas o están nombradas incorrectamente en el DataFrame
-         print(f"Error de clave en el procesamiento de los datos de entrada: {e}")
-         raise HTTPException(status_code=422, detail=f"Campo de datos de entrada inválido o faltante: {e}")
+        # Error común si faltan columnas o están nombradas incorrectamente en el DataFrame
+        print(f"Error de clave en el procesamiento de los datos de entrada: {e}")
+        raise HTTPException(status_code=422, detail=f"Campo de datos de entrada inválido o faltante: {e}")
     except Exception as e:
         print(f"Error durante la predicción: {e}")
         raise HTTPException(status_code=500, detail=f"Error interno durante el procesamiento de la predicción: {e}")
@@ -204,18 +254,6 @@ async def login(request: LoginRequest):
 def health_check():
     return {
         "status": "ok",
-        # "models": {
-        #     "tabular": {
-        #         "loaded": tabular_model is not None,
-        #         "features": len(tabular_features),
-        #         "threshold": tabular_threshold
-        #     },
-        #     "multimodal": {
-        #         "loaded": multimodal_model is not None,
-        #         "features": len(multimodal_features) if multimodal_model else 0,
-        #         "threshold": multimodal_threshold
-        #     }
-        # }
     }
 
 # --- Punto de entrada opcional para ejecución local ---
