@@ -3,6 +3,7 @@
 /backend/db/*.sql
 /backend/dashboard.pbix
 *.joblib
+*.zip
 
 # Python
 __pycache__/
